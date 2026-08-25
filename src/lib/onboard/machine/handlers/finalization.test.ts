@@ -146,7 +146,7 @@ describe("finalization handlers", () => {
     // The sandbox name lets the chain resolve this sandbox's own agent API
     // port rather than the agent manifest default (#9290).
     expect(calls.buildChain).toHaveBeenCalledWith("http://127.0.0.1:18789", "my-assistant");
-    expect(calls.verify).toHaveBeenCalledWith("my-assistant", { port: 18789 });
+    expect(calls.verify).toHaveBeenCalledWith("my-assistant", { port: 18789 }, "provider");
     expect(calls.log).toHaveBeenCalledWith("  ✓ verified");
     expect(calls.dashboard).toHaveBeenCalledWith(
       "my-assistant",

@@ -533,6 +533,36 @@ describe("verifyDeployment", () => {
     expect(result.verification.inferenceRouteWorking).toBe(true);
   });
 
+  it("reports a missing model-list route as a failing inference route (#10080)", async () => {
+    const deps = makeDeps({
+      executeSandboxCommand: (_name: string, script: string) =>
+        script.includes("inference.local")
+          ? { status: 0, stdout: "404", stderr: "" }
+          : { status: 0, stdout: "200", stderr: "" },
+    });
+    const result = await verifyDeployment("my-sandbox", chain, deps, NO_RETRY);
+    expect(result.verification.inferenceRouteWorking).toBe(false);
+    expect(result.healthy).toBe(false);
+    const infDiag = result.diagnostics.find((d) => d.link === "inference");
+    expect(infDiag?.status).toBe("fail");
+    expect(infDiag?.detail).toContain("model-list route");
+  });
+
+  it("accepts the model-list absence when the agent and provider expect it (#10080)", async () => {
+    const deps = makeDeps({
+      executeSandboxCommand: (_name: string, script: string) =>
+        script.includes("inference.local")
+          ? { status: 0, stdout: "404", stderr: "" }
+          : { status: 0, stdout: "200", stderr: "" },
+    });
+    const result = await verifyDeployment("my-sandbox", chain, deps, {
+      ...NO_RETRY,
+      agentName: "langchain-deepagents-code",
+      provider: "openrouter-api",
+    });
+    expect(result.verification.inferenceRouteWorking).toBe(true);
+  });
+
   it("keeps the inference route reachability probe below the OpenClaw cron preflight timeout", async () => {
     const scripts: string[] = [];
     const deps = makeDeps({

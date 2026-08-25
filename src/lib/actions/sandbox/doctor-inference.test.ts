@@ -166,7 +166,7 @@ describe("doctor inference checks", () => {
       probeSandboxInferenceGatewayHealthImpl: routeProbe,
     });
 
-    expect(routeProbe).toHaveBeenCalledWith("alpha");
+    expect(routeProbe).toHaveBeenCalledWith("alpha", { provider });
     expect(checks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ label: "Inference route (gateway)", status: "fail" }),

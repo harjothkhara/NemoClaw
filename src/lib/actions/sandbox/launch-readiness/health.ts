@@ -11,6 +11,7 @@ import type { SandboxEntry } from "../../../state/registry";
 import {
   buildSandboxInferenceRouteProbeArgs,
   type InferenceRouteProbeAgent,
+  isModelsRouteAbsenceExpected,
   parseSandboxInferenceRouteProbeResult,
 } from "../connect-inference-route-probe";
 import { areSandboxLaunchForwardsHealthy } from "../forward-recovery";
@@ -160,8 +161,7 @@ export async function requireLaunchSemanticHealth(
       inference.healthy && inference.httpStatus >= 200 && inference.httpStatus < 300;
     if (strictRouteHealth) return;
     const openRouterDcodeModelsRouteUnsupported =
-      agentName === "langchain-deepagents-code" &&
-      entry.provider === "openrouter-api" &&
+      isModelsRouteAbsenceExpected(agentName, entry.provider) &&
       inference.healthy &&
       inference.httpStatus === 404;
     if (openRouterDcodeModelsRouteUnsupported) {

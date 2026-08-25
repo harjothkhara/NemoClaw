@@ -146,11 +146,12 @@ async function collectInferenceRouteProbe(
   sandboxName: string,
   sandboxReachable: boolean,
   probe: typeof probeSandboxInferenceGatewayHealth,
+  provider: string,
 ): Promise<ProviderHealthStatus> {
   if (!sandboxReachable) return skippedInferenceGatewayProbe();
   let gateway: Awaited<ReturnType<typeof probeSandboxInferenceGatewayHealth>> = null;
   try {
-    gateway = await probe(sandboxName);
+    gateway = await probe(sandboxName, { provider });
   } catch {
     gateway = null;
   }
@@ -217,6 +218,7 @@ export async function collectInferenceChecks(
     sandboxName,
     sandboxReachable,
     deps.probeSandboxInferenceGatewayHealthImpl ?? probeSandboxInferenceGatewayHealth,
+    route.provider,
   );
   pushInferenceHealthCheck(checks, gatewayProbe, { label: "Inference route (gateway)" });
   for (const diagnostic of collectProviderHealthDiagnostics(

@@ -155,7 +155,9 @@ describe("sandbox status inference.local route health (#6192)", () => {
 
     const snapshot = await collectSandboxStatusSnapshot("alpha", { deps });
 
-    expect(deps.probeSandboxInferenceGatewayHealthImpl).toHaveBeenCalledWith("alpha");
+    expect(deps.probeSandboxInferenceGatewayHealthImpl).toHaveBeenCalledWith("alpha", {
+      provider,
+    });
     expect(snapshot.inferenceHealth).toMatchObject({ ok: true, probed: true });
   });
 

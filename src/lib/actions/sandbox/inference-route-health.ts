@@ -9,6 +9,7 @@ import {
   buildSandboxInferenceRouteProbeArgs,
   classifyInferenceRouteFailureLabel,
   isDcodeManagedExecMissingDetail,
+  isModelsRouteAbsenceExpected,
   parseSandboxInferenceRouteProbeResult,
 } from "./connect-inference-route-probe";
 import {
@@ -36,21 +37,26 @@ export type SandboxInferenceRouteHealth = {
  * Returns null when OpenShell exec, DNS, TLS, proxy setup, or the response
  * framing cannot produce a trusted route result. Callers must treat null as
  * probe unavailable, never as a healthy or definitively broken route.
+ *
+ * Pass the recorded `provider` so the missing-model-list 404 keeps the same
+ * agent-scoped meaning that launch readiness gives it (#10080).
  */
 export async function probeSandboxInferenceGatewayHealth(
   sandboxName: string,
   options: {
     captureOpenshellImpl?: typeof captureOpenshellForStatus;
     getSessionAgentImpl?: typeof agentRuntime.getSessionAgent;
+    provider?: string | null;
   } = {},
 ): Promise<SandboxInferenceRouteHealth | null> {
   const endpoint = "https://inference.local/v1/models";
   const capture = options.captureOpenshellImpl ?? captureOpenshellForStatus;
   const getSessionAgent = options.getSessionAgentImpl ?? agentRuntime.getSessionAgent;
+  const sessionAgent = getSessionAgent(sandboxName);
   let result: Awaited<ReturnType<typeof captureOpenshellForStatus>>;
   try {
     result = await capture(
-      buildSandboxInferenceRouteProbeArgs(sandboxName, getSessionAgent(sandboxName)),
+      buildSandboxInferenceRouteProbeArgs(sandboxName, sessionAgent),
       {
         ignoreError: true,
         includeStreams: true,
@@ -73,12 +79,28 @@ export async function probeSandboxInferenceGatewayHealth(
       : null;
   }
   const status = parsed.httpStatus;
-  if (parsed.healthy) {
+  // A 404 means the model-list route is absent, so the response proves nothing
+  // about the inference route. Only the Deep Agents Code OpenRouter pair may
+  // treat it as reachable; every other pair fails closed here so status and
+  // doctor agree with launch readiness (#10080).
+  const modelsRouteAbsent =
+    status === 404 && !isModelsRouteAbsenceExpected(sessionAgent?.name, options.provider);
+  if (parsed.healthy && !modelsRouteAbsent) {
     return {
       ok: true,
       endpoint,
       httpStatus: status,
       detail: `Inference gateway responded HTTP ${status} on ${endpoint} (full chain reachable).`,
+    };
+  }
+  if (modelsRouteAbsent) {
+    return {
+      ok: false,
+      endpoint,
+      httpStatus: status,
+      detail:
+        `Inference gateway returned HTTP 404 on ${endpoint}; the model-list route is absent, ` +
+        `so this sandbox's inference route is not proven. Check the configured provider endpoint.`,
     };
   }
   if (classifyInferenceRouteFailureLabel(status) === "unhealthy") {

@@ -3420,7 +3420,7 @@ async function runOnboard(opts: OnboardOptions = {}): Promise<void> {
           cleanupStaleHostFiles,
           getChatUiUrl: () => process.env.CHAT_UI_URL || `http://127.0.0.1:${DASHBOARD_PORT}`,
           buildVerifyChain: (chatUiUrl, name) => buildAgentVerifyChain(chatUiUrl, name, agent),
-          verifyDeployment: async (name, chain) => {
+          verifyDeployment: async (name, chain, provider) => {
             const verifyDeploymentModule: typeof import("./verify-deployment") = require("./verify-deployment");
             return verifyDeploymentModule.verifyDeployment(
               name,
@@ -3450,13 +3450,11 @@ async function runOnboard(opts: OnboardOptions = {}): Promise<void> {
                 providerExistsInGateway: (providerName: string) =>
                   providerExistsInGateway(providerName),
               },
-              {
-                diagnoseCustomOpenClawRuntime:
-                  verifyDeploymentModule.shouldDiagnoseCustomOpenClawRuntime(
-                    liveFinalFlowContext.fromDockerfile,
-                    agent?.name,
-                  ),
-              },
+              verifyDeploymentModule.buildVerifyDeploymentOptions(
+                liveFinalFlowContext.fromDockerfile,
+                agent?.name,
+                provider,
+              ),
             );
           },
           formatVerificationDiagnostics: (result) => {

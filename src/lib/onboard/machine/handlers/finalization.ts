@@ -69,7 +69,16 @@ export interface FinalizationStateOptions<Agent, VerifyChain, VerificationResult
      * the manifest default would probe a sibling sandbox's port (#9290).
      */
     buildVerifyChain(chatUiUrl: string, sandboxName: string): VerifyChain;
-    verifyDeployment(sandboxName: string, chain: VerifyChain): Promise<VerificationResult>;
+    /**
+     * `provider` lets the verifier decide whether an absent model-list route
+     * is the expected result for the selected agent and provider pair, or a
+     * route that was never proven (#10080).
+     */
+    verifyDeployment(
+      sandboxName: string,
+      chain: VerifyChain,
+      provider: string,
+    ): Promise<VerificationResult>;
     formatVerificationDiagnostics(result: VerificationResult): string[];
     isDeploymentHealthy(result: VerificationResult): boolean;
     reportDeploymentReadiness(healthy: boolean): void;
@@ -347,7 +356,7 @@ export async function handlePostVerifyState<Agent, VerifyChain, VerificationResu
         deps.verifyWebSearchInsideSandbox(sandboxName, agent, webSearchProvider));
     // Confirm the delivered sandbox is reachable before printing the live dashboard (#2342).
     const verifyChain = deps.buildVerifyChain(deps.getChatUiUrl(), sandboxName);
-    const verificationResult = await deps.verifyDeployment(sandboxName, verifyChain);
+    const verificationResult = await deps.verifyDeployment(sandboxName, verifyChain, provider);
     deploymentHealthy =
       webSearchCredentialBoundarySafe && deps.isDeploymentHealthy(verificationResult);
     verificationDiagnostics = deps.formatVerificationDiagnostics(verificationResult);

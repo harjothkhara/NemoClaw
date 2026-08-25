@@ -30,6 +30,26 @@ describe("sandbox inference route health", () => {
     },
   );
 
+  it("reports a missing model-list route as a failing route for an ordinary agent (#10080)", async () => {
+    const result = await probeSandboxInferenceGatewayHealth("my-sandbox", {
+      captureOpenshellImpl: makeCapture("OK 404"),
+    });
+
+    expect(result).toMatchObject({ ok: false, httpStatus: 404 });
+    expect(result?.detail).toContain("model-list route");
+  });
+
+  it("keeps the Deep Agents Code OpenRouter model-list absence reachable (#10080)", async () => {
+    const result = await probeSandboxInferenceGatewayHealth("deep-code", {
+      captureOpenshellImpl: makeCapture("OK 404"),
+      getSessionAgentImpl: () => ({ name: "langchain-deepagents-code" }) as never,
+      provider: "openrouter-api",
+    });
+
+    expect(result).toMatchObject({ ok: true, httpStatus: 404 });
+    expect(result?.detail).toContain("full chain reachable");
+  });
+
   it("reports HTTP 5xx as an unhealthy authoritative route (#6192)", async () => {
     const result = await probeSandboxInferenceGatewayHealth("my-sandbox", {
       captureOpenshellImpl: makeCapture("BROKEN 503"),

@@ -954,7 +954,9 @@ describe("runSandboxDoctor flow", () => {
       ["sandbox", "list"],
       expect.any(Object),
     );
-    expect(harness.probeSandboxInferenceGatewayHealthSpy).toHaveBeenCalledWith("alpha");
+    expect(harness.probeSandboxInferenceGatewayHealthSpy).toHaveBeenCalledWith("alpha", {
+      provider: "ollama-local",
+    });
     expect(harness.executeSandboxCommandForVerificationSpy).toHaveBeenCalled();
     expect(harness.buildToolScopeChecksSpy).toHaveBeenCalledWith(
       "alpha",

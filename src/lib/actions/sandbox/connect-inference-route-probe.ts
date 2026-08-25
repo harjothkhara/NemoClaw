@@ -73,12 +73,28 @@ function formatUntrustedProbeDetail(detail: string): string {
 }
 
 /**
+ * The Deep Agents Code OpenRouter adapter does not serve `GET /v1/models`, so
+ * its HTTP 404 is the expected model-list result for that one agent and
+ * provider pair, and launch readiness proves the route with a bounded
+ * inference request instead (#9834). Every other pair must treat a missing
+ * model-list route as a route that has not been proven (#10080).
+ */
+export function isModelsRouteAbsenceExpected(
+  agentName: string | null | undefined,
+  provider: string | null | undefined,
+): boolean {
+  return agentName === "langchain-deepagents-code" && provider === "openrouter-api";
+}
+
+/**
  * Classify a route result that is already known not to be healthy.
- * Final HTTP 200-499 responses are handled as reachable before this helper is
- * called; passing one here is outside the helper's contract.
+ * Final HTTP 200-499 responses other than the missing-model-list 404 are
+ * handled as reachable before this helper is called; passing one here is
+ * outside the helper's contract. A 404 answered the request, so it is
+ * reachable-but-unhealthy rather than unreachable (#10080).
  */
 export function classifyInferenceRouteFailureLabel(httpStatus: number): InferenceRouteFailureLabel {
-  return httpStatus >= 500 && httpStatus < 600 ? "unhealthy" : "unreachable";
+  return httpStatus === 404 || (httpStatus >= 500 && httpStatus < 600) ? "unhealthy" : "unreachable";
 }
 
 export function buildSandboxInferenceRouteProbeArgs(

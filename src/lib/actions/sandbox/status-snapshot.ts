@@ -608,7 +608,7 @@ export async function collectSandboxStatusSnapshot(
       const attempts = recoveredManagedGateway ? RECOVERED_INFERENCE_PROBE_ATTEMPTS : 1;
       await retryUntilAsync(
         async () => {
-          gatewayChain = await probe(sandboxName);
+          gatewayChain = await probe(sandboxName, { provider: invocationProvider });
           invocation =
             gatewayChain?.ok && canProbeInvocation
               ? runSandboxInferenceInvocationProbe(

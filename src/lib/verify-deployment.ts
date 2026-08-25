@@ -22,11 +22,13 @@ import { compareChannelSets, type RuntimeChannelStatus } from "./channel-runtime
 import type { DashboardDeliveryChain } from "./dashboard/contract";
 import { listMessagingChannelsWithoutCredentials } from "./messaging/channels";
 
+import { isModelsRouteAbsenceExpected } from "./actions/sandbox/connect-inference-route-probe";
 import { retryUntilAsync } from "./core/retry";
 import {
   buildCustomOpenClawRuntimeFailureHints,
   classifyOpenClawRuntimeFailure,
   type SandboxCommandExecutor,
+  shouldDiagnoseCustomOpenClawRuntime,
 } from "./onboard/custom-openclaw-runtime-diagnosis";
 import { getMessagingProviderNamesForChannel } from "./onboard/messaging-reuse";
 
@@ -139,6 +141,29 @@ export interface VerifyDeploymentOptions {
    * startup paths intentionally differ.
    */
   diagnoseCustomOpenClawRuntime?: boolean;
+  /**
+   * The selected agent and provider. One adapter pair does not serve
+   * `GET /v1/models`, so its HTTP 404 is the expected model-list result
+   * rather than an absent route (#9834, #10080).
+   */
+  agentName?: string | null;
+  provider?: string | null;
+}
+
+/**
+ * Shape the verification options from the onboarding selection, so the entry
+ * point does not have to know which agent and provider facts each check reads.
+ */
+export function buildVerifyDeploymentOptions(
+  fromDockerfile: string | null | undefined,
+  agentName: string | null | undefined,
+  provider: string | null | undefined,
+): VerifyDeploymentOptions {
+  return {
+    diagnoseCustomOpenClawRuntime: shouldDiagnoseCustomOpenClawRuntime(fromDockerfile, agentName),
+    agentName,
+    provider,
+  };
 }
 
 const DEFAULT_RETRY_DELAYS_MS: readonly number[] = [
@@ -225,11 +250,12 @@ function fetchGatewayVersion(sandboxName: string, deps: VerifyDeploymentDeps): s
   return parseVersionFromText(result.stdout, "openclaw --version");
 }
 
-type InferenceRouteStatus = "ok" | "unreachable" | "unhealthy";
+type InferenceRouteStatus = "ok" | "unreachable" | "unhealthy" | "models-route-absent";
 
 function probeInferenceRouteOnce(
   sandboxName: string,
   deps: VerifyDeploymentDeps,
+  modelsRouteAbsenceExpected: boolean,
 ): { status: InferenceRouteStatus; detail: string } {
   const script =
     `HTTP_CODE=$(curl -so /dev/null -w '%{http_code}' --max-time ${INFERENCE_ROUTE_REACHABILITY_MAX_SECONDS} ` +
@@ -251,6 +277,15 @@ function probeInferenceRouteOnce(
       detail: `inference.local returned HTTP ${code} (route reachable but endpoint unhealthy)`,
     };
   }
+  // A 404 answers the request but proves no inference route: the model-list
+  // endpoint is absent. Only the one adapter that never serves it may pass
+  // on that result (#10080).
+  if (code === 404 && !modelsRouteAbsenceExpected) {
+    return {
+      status: "models-route-absent",
+      detail: "inference.local returned HTTP 404 (the model-list route is absent on this endpoint)",
+    };
+  }
   return { status: "ok", detail: `inference.local responded HTTP ${code}` };
 }
 
@@ -259,8 +294,9 @@ async function verifyInferenceRoute(
   deps: VerifyDeploymentDeps,
   retryDelaysMs: readonly number[],
   sleep: (ms: number) => Promise<void>,
+  modelsRouteAbsenceExpected: boolean,
 ): Promise<{ status: InferenceRouteStatus; detail: string }> {
-  return retryUntilAsync(() => probeInferenceRouteOnce(sandboxName, deps), {
+  return retryUntilAsync(() => probeInferenceRouteOnce(sandboxName, deps, modelsRouteAbsenceExpected), {
     accept: (result) => result.status === "ok",
     retryDelaysMs,
     sleep,
@@ -618,6 +654,7 @@ export async function verifyDeployment(
     deps,
     gateway.reachable ? retryDelaysMs : [],
     sleep,
+    isModelsRouteAbsenceExpected(options.agentName, options.provider),
   );
   const inferenceRouteWorking = inference.status === "ok";
   diagnostics.push({
@@ -627,9 +664,11 @@ export async function verifyDeployment(
     hint:
       inference.status === "ok"
         ? ""
-        : inference.status === "unhealthy"
-          ? "The inference route is reachable but the endpoint returned a server error (HTTP 5xx). If the endpoint runs on the host, configure it to listen on a host address reachable through host.openshell.internal and restrict access with the host firewall or equivalent controls; a 127.0.0.1/localhost-only bind is not reachable from the sandbox. Then re-run: nemoclaw <sandbox> status."
-          : "The inference proxy is unreachable. Confirm the configured endpoint is running and reachable from the sandbox, then re-run: nemoclaw <sandbox> status.",
+        : inference.status === "models-route-absent"
+          ? "The inference route answered but does not serve GET /v1/models, so the configured model cannot be validated. Confirm the provider endpoint is the OpenAI-compatible base URL and not a path below it, then re-run: nemoclaw <sandbox> status."
+          : inference.status === "unhealthy"
+            ? "The inference route is reachable but the endpoint returned a server error (HTTP 5xx). If the endpoint runs on the host, configure it to listen on a host address reachable through host.openshell.internal and restrict access with the host firewall or equivalent controls; a 127.0.0.1/localhost-only bind is not reachable from the sandbox. Then re-run: nemoclaw <sandbox> status."
+            : "The inference proxy is unreachable. Confirm the configured endpoint is running and reachable from the sandbox, then re-run: nemoclaw <sandbox> status.",
   });
 
   // 5. Messaging bridges (providers attached AND runtime config exposes
