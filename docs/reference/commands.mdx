@@ -2079,13 +2079,15 @@ The main `Inference` line reports one of these states:
 |-------|---------|
 | `healthy` | The route returned a structurally valid result for the inference request. |
 | `unauthorized` | The route rejected the inference request with HTTP `401` or `403`. |
-| `reachable` | The route returned an HTTP status from `200` through `499` and NemoClaw did not send an inference request. |
-| `unhealthy` | The route returned HTTP `500` through `599`, another failing status, or an invalid 2xx response body. |
+| `reachable` | The route returned an HTTP status from `200` through `499`, other than `404`, and NemoClaw did not send an inference request. |
+| `unhealthy` | The route returned HTTP `404`, HTTP `500` through `599`, another failing status, or an invalid 2xx response body. |
 | `unreachable` | The route had a transport failure, returned no final HTTP status (`000` or an interim `100` through `199`), returned an invalid status outside `100` through `599`, or the inference request returned no HTTP status. |
 | `not probed` | NemoClaw could not run the authoritative route probe from a reachable sandbox. |
 | `not verified` | NemoClaw could not verify the sandbox or gateway state, so it skips inference probing. |
 
 An authentication response on the route probe alone confirms that the route is reachable, not that provider credentials are valid.
+An HTTP `404` means the endpoint serves no `GET /v1/models` route, so it does not confirm reachability.
+Deep Agents Code on `openrouter-api` is the one exception, because that adapter never serves the model-list route.
 `$$nemoclaw <name> doctor` sends no inference request, so it reports an HTTP `401` or `403` route response as reachable and exits `0` where `status` reports `unauthorized`.
 The command can also print direct host-side provider checks such as `Inference (upstream)` and provider-specific subprobes.
 For supported remote providers, this diagnostic sends an authenticated request to the configured model and accepts only a recognized Chat Completions, streaming Chat Completions, or Anthropic Messages response.
@@ -2248,8 +2250,10 @@ This read-only path does not run Docker or OpenClaw checks, and `doctor --fix` i
 </AgentOnly>
 
 For inference health, `doctor` treats the probe to `https://inference.local/v1/models` from inside the sandbox as authoritative.
-HTTP responses from `200` through `499`, including `401` and `403`, pass this check.
-HTTP `500` through `599`, interim `100` through `199`, transport failures with status `000`, invalid status values, and an unavailable authoritative probe fail the check.
+HTTP responses from `200` through `499`, including `401` and `403`, pass this check, except HTTP `404`.
+An HTTP `404` means the endpoint serves no `GET /v1/models` route, so it cannot show that the inference route works.
+Deep Agents Code on `openrouter-api` is the one exception, because that adapter never serves the model-list route.
+HTTP `404`, HTTP `500` through `599`, interim `100` through `199`, transport failures with status `000`, invalid status values, and an unavailable authoritative probe fail the check.
 Direct provider and upstream probes use the same authenticated model-invocation checks as status and remain diagnostic only, so their failure does not fail `doctor` when the authoritative in-sandbox route is reachable.
 For gateway runtimes, `doctor` also reports an informational `Serving process: not checked` result because its fresh sandbox probes do not attest the long-running gateway process.
 This result does not fail the readiness check.

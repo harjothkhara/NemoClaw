@@ -2396,6 +2396,10 @@ $$nemoclaw <name> status
 The main `Inference` line probes `https://inference.local/v1/models` from inside the sandbox and then sends one inference request over the same route, so it reflects the route the agent uses.
 If that line shows `unauthorized`, `unhealthy`, `unreachable`, or `not probed`, inspect the labeled diagnostic lines to identify the failing hop.
 An `unauthorized` line means the route answered but rejected the request, so refresh the provider credential rather than the route.
+An `unhealthy` line that reports HTTP `404` means the endpoint answered but serves no `GET /v1/models` route, so NemoClaw cannot confirm the inference route.
+Check that the recorded endpoint is the OpenAI-compatible base URL and not a path below it.
+Onboarding reports the same case and exits nonzero.
+Deep Agents Code on `openrouter-api` is the one exception, because that adapter never serves the model-list route.
 For local Ollama and local vLLM, `Inference (ollama backend)` or the corresponding local-backend line reports the host-side service separately.
 For Local Ollama, current releases can also print `Inference (auth proxy)` when a proxy token is available.
 If a local backend or auth-proxy diagnostic fails, start the backend or re-run onboarding so NemoClaw can recreate the proxy token, restart the proxy, and refresh the route.
